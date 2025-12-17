@@ -135,7 +135,7 @@ frigate_auth(){
 	  signed_content="${header_base64}.${payload_base64}"
 	  signature=$(printf %s "$signed_content" | openssl dgst -binary -sha256 -hmac "$JWT_SECRET" | base64_urlencode)
 
-	  #uncomment to see the toekn value generated
+	  #uncomment to see the token value generated
 	  printf '%s' "${signed_content}.${signature}"
 }
 
@@ -190,12 +190,12 @@ if [[ -r "$config_file_location" ]]; then
 		fi
 		
 		#########################################################
-		#Frigate Memory Restart Thershold Status
+		#Frigate Memory Restart Threshold Status
 		#########################################################
 		
-		#Frigate seems to have a tendancy to slowly use more and more RAM over time
+		#Frigate seems to have a tendency to slowly use more and more RAM over time
 		#This portion of the script monitors the used memory of the Frigate container and if the memory exceeds a configurable value, the Frigate container will be Restarted
-		#tghe restart is only allowed to occur at a set hour of the day, typically 1:00AM or 2:00 AM when less activity is likley to occur reducing chances of loosing recordings of something importaint
+		#the restart is only allowed to occur at a set hour of the day, typically 1:00AM or 2:00 AM when less activity is likely to occur reducing chances of loosing recordings of something important
 
 		mem_status=$(docker stats $docker_container_name --format "{{.MemUsage}}" --no-stream)
 		explode=(`echo $mem_status | sed 's/,/ /g'`)
@@ -203,7 +203,7 @@ if [[ -r "$config_file_location" ]]; then
 		if [[ ${explode[0]} =~ "GiB" ]]; then  #only worry if we are using GB and not MB worth of memory
 			mem_used=${explode[0]}
 			mem_used=$(echo "${mem_used::-3}")		#removing the "GiB" from the end of the line
-			echo -e "\n\n_______________________________________\nFrigate Memory Restart Thershold Status\n_______________________________________"
+			echo -e "\n\n_______________________________________\nFrigate Memory Restart Threshold Status\n_______________________________________"
 			echo "-->Currently Used Memory: $mem_used GB"
 			mem_used=$(printf "%.0f\n" "${mem_used}e2") #multiply by 100 to get rid of decimal places since trueNAS does not have "bc" installed
 
@@ -255,7 +255,7 @@ if [[ -r "$config_file_location" ]]; then
 							if [[ $app_state -eq 1 ]]; then #app was found in the running state
 								echo "-->Stopping Application \"$truenas_container_name\""
 								midclt call app.stop "$truenas_container_name"
-								echo "-->Waiting 60 seconds for app to stop" #the midclt command returns a value immediatwlly even though the app is not yet stopped
+								echo "-->Waiting 60 seconds for app to stop" #the midclt command returns a value immediately even though the app is not yet stopped
 								sleep 10
 								echo "-->50 seconds remaining"
 								sleep 10
@@ -268,7 +268,7 @@ if [[ -r "$config_file_location" ]]; then
 								echo "-->10 seconds remaining"
 								sleep 10
 								if [ "$( midclt call app.query '[["name", "=", "'$truenas_container_name'"]]' | jq -r '.[] | .state' )" == "STOPPED" ]; then #app is installed and stopped
-									echo "-->Application \"$truenas_container_name\" Sucessfully Stopped"
+									echo "-->Application \"$truenas_container_name\" Successfully Stopped"
 									app_stopped=1
 								else
 									echo "-->Application \"$truenas_container_name\" Failed to Stop "
@@ -278,10 +278,10 @@ if [[ -r "$config_file_location" ]]; then
 								fi
 							fi
 							
-							if [[ $app_stopped -eq 1 ]]; then	#we sucessfully stopped the app, let's restart it
+							if [[ $app_stopped -eq 1 ]]; then	#we successfully stopped the app, let's restart it
 								echo "-->Starting Application \"$truenas_container_name\""
 								midclt call app.start "$truenas_container_name"
-								echo "-->Waiting 60 seconds for app to start" #the midclt command returns a value immediatwlly even though the app is not yet started
+								echo "-->Waiting 60 seconds for app to start" #the midclt command returns a value immediately even though the app is not yet started
 								sleep 10
 								echo "-->50 seconds remaining"
 								sleep 10
@@ -294,7 +294,7 @@ if [[ -r "$config_file_location" ]]; then
 								echo "-->10 seconds remaining"
 								sleep 10
 								if [ "$( midclt call app.query '[["name", "=", "'$truenas_container_name'"]]' | jq -r '.[] | .state' )" == "RUNNING" ]; then #app is installed and running
-									echo "-->Application \"$truenas_container_name\" Sucessfully Started"
+									echo "-->Application \"$truenas_container_name\" Successfully Started"
 									send_email "$email_last_sent" "Frigate Restarted Due to Excessive Memory Usage" "Frigate Restarted" 60
 									echo "$current_time" > "$container_restart_tracker"
 								else
@@ -366,7 +366,7 @@ if [[ -r "$config_file_location" ]]; then
 				#get data from Frigate
 				raw_metrics=$(curl -sS -X GET "$frigate_address" -H "Authorization: Bearer $frigate_token" -H "Accept: application/json" 2>&1 | sed '/^#/d')
 
-				#validate if Frigate is reponding as it may be offline
+				#validate if Frigate is responding as it may be off line
 				if [[ "$(echo -n "$raw_metrics" | grep "Failed")" != "" ]]; then	
 					if [ ! -r "$log_file_location/frigate_error.txt" ]; then
 						now=$(date)
@@ -381,7 +381,7 @@ if [[ -r "$config_file_location" ]]; then
 					fi 
 				fi
 				
-				#validate if we have sucessfully authenticated
+				#validate if we have successfully authenticated
 				if [[ "$(echo -n "$raw_metrics" | grep "401 Authorization Required")" != "" ]]; then
 					#auth expired/rejected, get a new token as tokens are expected to expire every hour
 					frigate_token=$(frigate_auth)
@@ -391,7 +391,7 @@ if [[ -r "$config_file_location" ]]; then
 					raw_metrics=$(curl -sS -X GET "$frigate_address" -H "Authorization: Bearer $frigate_token" -H "Accept: application/json" 2>&1 | sed '/^#/d')
 					
 					if [[ "$(echo -n "$raw_metrics" | grep "401 Authorization Required")" != "" ]]; then
-						send_email "$email_last_sent" "Frigate Authorization Token Failed, Unable to Sucessfully Generate New Token. Unable to Log Frigate Metrics. Will try again in 60 minuets" "Frigate Authorization Failed" 0
+						send_email "$email_last_sent" "Frigate Authorization Token Failed, Unable to Successfully Generate New Token. Unable to Log Frigate Metrics. Will try again in 60 minuets" "Frigate Authorization Failed" 0
 						auth_failure_last_recorded=$current_time
 						echo "$frigate_token,1,$auth_failure_last_recorded" > "$frigate_auth_file"
 						exit 1
@@ -401,11 +401,12 @@ if [[ -r "$config_file_location" ]]; then
 					fi
 				fi
 			else
-				#if an auth failure previously occured, wait 60 minutes to try again by resetting the auth failure flag
+				#if an auth failure previously occurred, wait 60 minutes to try again by resetting the auth failure flag
 				time_diff=$((( $current_time - $auth_failure_last_recorded ) / 60 ))
 				if [ $time_diff -ge 60 ]; then
 					echo "$frigate_token,0,$auth_failure_last_recorded" > "$frigate_auth_file"
 				fi
+				exit 1
 			fi
 				
 			
@@ -417,7 +418,7 @@ if [[ -r "$config_file_location" ]]; then
 			#########################################
 			measurement="Frigate_Metrics"			
 			
-			#Single line resuls not needing addtional processing
+			#Single line results not needing additional processing
 			process_virtual_memory_bytes=$(echo "$raw_metrics" | grep "process_virtual_memory_bytes")
 			process_virtual_memory_bytes=$(echo "${process_virtual_memory_bytes##* }")
 
@@ -514,7 +515,7 @@ if [[ -r "$config_file_location" ]]; then
 				let counter=counter+1
 			done <<< $(echo "$raw_metrics" | grep "frigate_storage_used_bytes")
 			
-			#Multi-line returned value depennding on quantity of detectors configured
+			#Multi-line returned value depending on quantity of detectors configured
 			#####################################
 			#frigate_detector_inference_speed_seconds
 			#####################################
@@ -549,7 +550,10 @@ if [[ -r "$config_file_location" ]]; then
 				let counter=counter+1
 			done <<< $(echo "$raw_metrics" | grep "frigate_detection_start")
 			
-			#Multi-line returned value depennding on quantity of cameras configured
+			#####################################
+			#CAMERA LEVEL METRICS
+			#####################################
+			#Multi-line returned value depending on quantity of cameras configured
 			counter=0
 			for counter in "${!camera_name[@]}"; do
 				frigate_audio_dBFS=$(echo "$raw_metrics" | grep "frigate_audio_dBFS" | grep "${camera_name[$counter]}")
@@ -597,10 +601,10 @@ if [[ -r "$config_file_location" ]]; then
 		#Frigate Camera Operational Status Checker
 		#########################################################
 		
-		#This portion of the script looks at the number of received frames from each camera and if the frames are 0.0, then the camera is offline or malfuncting
+		#This portion of the script looks at the number of received frames from each camera and if the frames are 0.0, then the camera is off line or malfunctioning
 		#the script will then send emails per camera to inform the user that something is wrong with that particular camera
-		#when any particular camera is back online the script will send a new email informing the user the particular camera is back online. 
-		#this portion of the script only runs every five minutes to add hysterysis to prevent floods of emails if a camera is acking flakey. 
+		#when any particular camera is back on line the script will send a new email informing the user the particular camera is back on line. 
+		#this portion of the script only runs every five minutes to add hysteresis to prevent floods of emails if a camera is acting flaky. 
 		
 		echo -e "\n\n_______________________________________\nFrigate Camera Operational Status Checker\n_______________________________________"
 		if [ "$current_time_min" == "00" ] || [ "$current_time_min" == "05" ] || [ "$current_time_min" == "10" ] || [ "$current_time_min" == "15" ] || [ "$current_time_min" == "20" ] || [ "$current_time_min" == "25" ] || [ "$current_time_min" == "30" ] || [ "$current_time_min" == "35" ] || [ "$current_time_min" == "40" ] || [ "$current_time_min" == "45" ] || [ "$current_time_min" == "50" ] || [ "$current_time_min" == "55" ]; then
@@ -638,7 +642,7 @@ if [[ -r "$config_file_location" ]]; then
 						fi
 					fi
 				done
-			else #all cameras appear to be working, delete all log files to makr the cameras as good
+			else #all cameras appear to be working, delete all log files to mark the cameras as good
 				counter=0
 				echo -e "--> All Cameras Operating Normally\n\n"
 				for counter in "${!camera_name[@]}"; do
