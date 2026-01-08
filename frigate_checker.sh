@@ -6,13 +6,13 @@
 #########################################################
 #USER VARIABLES
 #########################################################
-container_restart_tracker="/mnt/volume1/logging/notifications/frigate_restart_tracker.txt"
 log_file_location="/mnt/volume1/logging/notifications"
+container_restart_tracker="$log_file_location/frigate_restart_tracker.txt"
 email_last_sent="$log_file_location/frigate_checker_last_email_sent.txt"
 lock_file_location="$log_file_location/frigate_checker.lock"
+frigate_auth_file="$log_file_location/frigate_auth.txt"
 config_file_location="/mnt/volume1/hosting/web/config/config_files/frigate_checker_config.txt"
 camera_name_file_location="/mnt/volume1/hosting/web/config/config_files/frigate_checker_camera_names.txt"
-frigate_auth_file="$log_file_location/frigate_auth.txt"
 jwt_secret_file_location="/mnt/volume1/apps/figate/config/.jwt_secret"
 capture_interval_adjustment=1
 debug=0
