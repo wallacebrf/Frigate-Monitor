@@ -1,0 +1,1 @@
+to_email@email.com,from_email@email.com,8,02,86400,frigate_docker_ps_name,frigate_truenas_app_name,server_name,https://frigate.yourdomain.com/api/metrics,1,10,Influxdb_IP_address,Influxdb_IP_port,Influxdb_IP_bucket_id,Influxdb_IP_org,Influxdb_IP_API-key
