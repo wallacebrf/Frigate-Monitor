@@ -1,0 +1,1 @@
+front_left,front_right,drive,patio,garage,shed,north_east,north_west,backyard,frontdoor,reardoor,apples
