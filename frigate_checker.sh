@@ -1,18 +1,18 @@
 #!/bin/bash
-#version 2.0 dated 12/16/2025
+#version 3.0 dated 1/21/2026
 #By Brian Wallace
 
 
 #########################################################
 #USER VARIABLES
 #########################################################
+container_restart_tracker="/mnt/volume1/logging/notifications/frigate_restart_tracker.txt"
 log_file_location="/mnt/volume1/logging/notifications"
-container_restart_tracker="$log_file_location/frigate_restart_tracker.txt"
 email_last_sent="$log_file_location/frigate_checker_last_email_sent.txt"
 lock_file_location="$log_file_location/frigate_checker.lock"
-frigate_auth_file="$log_file_location/frigate_auth.txt"
 config_file_location="/mnt/volume1/hosting/web/config/config_files/frigate_checker_config.txt"
 camera_name_file_location="/mnt/volume1/hosting/web/config/config_files/frigate_checker_camera_names.txt"
+frigate_auth_file="$log_file_location/frigate_auth.txt"
 jwt_secret_file_location="/mnt/volume1/apps/figate/config/.jwt_secret"
 capture_interval_adjustment=1
 debug=0
@@ -367,7 +367,7 @@ if [[ -r "$config_file_location" ]]; then
 				raw_metrics=$(curl -sS -X GET "$frigate_address" -H "Authorization: Bearer $frigate_token" -H "Accept: application/json" 2>&1 | sed '/^#/d')
 
 				#validate if Frigate is responding as it may be off line
-				if [[ "$(echo -n "$raw_metrics" | grep "Failed")" != "" ]]; then	
+				if [[ "$(echo -n "$raw_metrics" | grep "Failed")" != "" ]] || [[ "$(echo -n "$raw_metrics" | grep "502 Bad Gateway")" != "" ]] || [[ "$(echo -n "$raw_metrics" | grep "500 Internal Server Error")" != "" ]]; then	
 					if [ ! -r "$log_file_location/frigate_error.txt" ]; then
 						now=$(date)
 						echo "$now" > "$log_file_location/frigate_error.txt"
@@ -451,10 +451,34 @@ if [[ -r "$config_file_location" ]]; then
 
 			frigate_service_last_updated_timestamp=$(echo "$raw_metrics" | grep "frigate_service_last_updated_timestamp")
 			frigate_service_last_updated_timestamp=$(echo "${frigate_service_last_updated_timestamp##* }")
+			
+			review_segment_manager_cpu=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "frigate.review_segment_manager" | grep "Other")
+			review_segment_manager_cpu=$(echo "${review_segment_manager_cpu##* }")
+			
+			review_segment_manager_mem=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "frigate.review_segment_manager" | grep "Other")
+			review_segment_manager_mem=$(echo "${review_segment_manager_mem##* }")
+			
+			go2rtc_cpu=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "go2rtc.yaml" | grep "Other")
+			go2rtc_cpu=$(echo "${go2rtc_cpu##* }")
+			
+			go2rtc_mem=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "go2rtc.yaml" | grep "Other")
+			go2rtc_mem=$(echo "${go2rtc_mem##* }")
+			
+			review_recording_manager_cpu=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "frigate.recording_manager" | grep "Other")
+			review_recording_manager_cpu=$(echo "${review_recording_manager_cpu##* }")
+			
+			review_recording_manager_mem=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "frigate.recording_manager" | grep "Other")
+			review_recording_manager_mem=$(echo "${review_recording_manager_mem##* }")
+			
+			full_system_cpu=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "frigate.full_system")
+			full_system_cpu=$(echo "${full_system_cpu##* }")
+			
+			full_system_mem=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "frigate.full_system")
+			full_system_mem=$(echo "${full_system_mem##* }")
 
 			
-			post_url=$post_url"$measurement,nas_name=$nas_name,metric=system process_virtual_memory_bytes=$process_virtual_memory_bytes,process_resident_memory_bytes=$process_resident_memory_bytes,process_start_time_seconds=$process_start_time_seconds,process_cpu_seconds_total=$process_cpu_seconds_total,process_open_fds=$process_open_fds,process_max_fds=$process_max_fds,frigate_detection_total_fps=$frigate_detection_total_fps,frigate_gpu_usage_percent=$frigate_gpu_usage_percent,frigate_gpu_mem_usage_percent=$frigate_gpu_mem_usage_percent,frigate_service_uptime_seconds=$frigate_service_uptime_seconds,frigate_service_last_updated_timestamp=$frigate_service_last_updated_timestamp
-	"
+			post_url=$post_url"$measurement,nas_name=$nas_name,metric=system process_virtual_memory_bytes=$process_virtual_memory_bytes,process_resident_memory_bytes=$process_resident_memory_bytes,process_start_time_seconds=$process_start_time_seconds,process_cpu_seconds_total=$process_cpu_seconds_total,process_open_fds=$process_open_fds,process_max_fds=$process_max_fds,frigate_detection_total_fps=$frigate_detection_total_fps,frigate_gpu_usage_percent=$frigate_gpu_usage_percent,frigate_gpu_mem_usage_percent=$frigate_gpu_mem_usage_percent,frigate_service_uptime_seconds=$frigate_service_uptime_seconds,frigate_service_last_updated_timestamp=$frigate_service_last_updated_timestamp,go2rtc_cpu=$go2rtc_cpu,go2rtc_mem=$go2rtc_mem,review_segment_manager_cpu=$review_segment_manager_cpu,review_segment_manager_mem=$review_segment_manager_mem,review_recording_manager_cpu=$review_recording_manager_cpu,review_recording_manager_mem=$review_recording_manager_mem,full_system_cpu=$full_system_cpu,full_system_mem=$full_system_mem
+"
 			
 			#multi-line (4x lines) returned results structures as
 				#frigate_storage_XYZ{storage="/media/frigate/recordings"} VALUE
@@ -465,7 +489,6 @@ if [[ -r "$config_file_location" ]]; then
 			#####################################
 			#frigate_storage_free_bytes
 			#####################################
-			counter=0
 			while IFS= read -r line; do	
 				storage_free_path=$(echo "${line% *}") #keeps everything to the left of the value
 				storage_free_path=$(echo "${storage_free_path::-2}") #removes the "} at the end
@@ -475,15 +498,12 @@ if [[ -r "$config_file_location" ]]; then
 				storage_free_value=$(echo "${line##* }") #stores just the value at the end as it is after the only space char in the string
 				
 				post_url=$post_url"$measurement,nas_name=$nas_name,metric=storage_free_bytes $storage_free_path=$storage_free_value
-	"
-				
-				let counter=counter+1
+"
 			done <<< $(echo "$raw_metrics" | grep "frigate_storage_free_bytes")
 			
 			#####################################
 			#frigate_storage_total_bytes
 			#####################################
-			counter=0
 			while IFS= read -r line; do	
 				storage_total_path=$(echo "${line% *}") #keeps everything to the left of the value
 				storage_total_path=$(echo "${storage_total_path::-2}") #removes the "} at the end
@@ -493,15 +513,12 @@ if [[ -r "$config_file_location" ]]; then
 				storage_total_value=$(echo "${line##* }") #stores just the value at the end as it is after the only space char in the string
 				
 				post_url=$post_url"$measurement,nas_name=$nas_name,metric=storage_total_bytes $storage_total_path=$storage_total_value
-	"
-				
-				let counter=counter+1
+"
 			done <<< $(echo "$raw_metrics" | grep "frigate_storage_total_bytes")
 			
 			#####################################
 			#frigate_storage_used_bytes
 			#####################################
-			counter=0
 			while IFS= read -r line; do	
 				storage_used_path=$(echo "${line% *}") #keeps everything to the left of the value
 				storage_used_path=$(echo "${storage_used_path::-2}") #removes the "} at the end
@@ -511,44 +528,54 @@ if [[ -r "$config_file_location" ]]; then
 				storage_used_value=$(echo "${line##* }") #stores just the value at the end as it is after the only space char in the string
 				
 				post_url=$post_url"$measurement,nas_name=$nas_name,metric=storage_used_bytes $storage_used_path=$storage_used_value
-	"
-				let counter=counter+1
+"
 			done <<< $(echo "$raw_metrics" | grep "frigate_storage_used_bytes")
 			
 			#Multi-line returned value depending on quantity of detectors configured
 			#####################################
-			#frigate_detector_inference_speed_seconds
+			#extract names of detectors, but also save inference speed
 			#####################################
 			counter=0
+			frigate_detector_name=()
 			while IFS= read -r line; do	
-				frigate_detector_name=$(echo "${line% *}") #keeps everything to the left of the value
-				frigate_detector_name=$(echo "${frigate_detector_name::-2}") #removes the "} at the end
-				frigate_detector_name=$(echo "${frigate_detector_name#*\"}") #keeps everything after the first /
-				frigate_detector_name=${frigate_detector_name//\//_} #replaces the / with _
+				frigate_detector_name_raw=$(echo "${line% *}") #keeps everything to the left of the value
+				frigate_detector_name_raw=$(echo "${frigate_detector_name_raw::-2}") #removes the "} at the end
+				frigate_detector_name_raw=$(echo "${frigate_detector_name_raw#*\"}") #keeps everything after the first /
+				frigate_detector_name_raw=${frigate_detector_name_raw//\//_} #replaces the / with _
+				
+				frigate_detector_name+=("$frigate_detector_name_raw")
 				
 				frigate_detector_inference_speed_seconds=$(echo "${line##* }") #stores just the value at the end as it is after the only space char in the string
 				
-				post_url=$post_url"$measurement,nas_name=$nas_name,metric=inference_speed $frigate_detector_name=$frigate_detector_inference_speed_seconds
-	"
+				post_url=$post_url"$measurement,nas_name=$nas_name,metric=inference_speed ${frigate_detector_name[$counter]}=$frigate_detector_inference_speed_seconds
+"
 				let counter=counter+1
 			done <<< $(echo "$raw_metrics" | grep "frigate_detector_inference_speed_seconds")
 			
 			#####################################
-			#frigate_detection_start
+			#Other Detector specific paramters
 			#####################################
-			counter=0
-			while IFS= read -r line; do	
-				frigate_detector_name=$(echo "${line% *}") #keeps everything to the left of the value
-				frigate_detector_name=$(echo "${frigate_detector_name::-2}") #removes the "} at the end
-				frigate_detector_name=$(echo "${frigate_detector_name#*\"}") #keeps everything after the first /
-				frigate_detector_name=${frigate_detector_name//\//_} #replaces the / with _
+			yy=0
+			for yy in "${!frigate_detector_name[@]}"; do
+			
+				frigate_detection_start=$(echo "$raw_metrics" | grep "frigate_detection_start" | grep "${frigate_detector_name[$yy]}")
+				frigate_detection_start=$(echo "${frigate_detection_start##* }") #stores just the value at the end as it is after the only space char in the string
 				
-				frigate_detection_start=$(echo "${line##* }") #stores just the value at the end as it is after the only space char in the string
+				frigate_detector_cpu_usage_percent_ffmpeg=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "detectors" | grep "${frigate_detector_name[$yy]}")
+				frigate_detector_cpu_usage_percent_ffmpeg=$(echo "${frigate_detector_cpu_usage_percent_ffmpeg##* }") #stores just the value at the end as it is after the only space char in the string
 				
-				post_url=$post_url"$measurement,nas_name=$nas_name,metric=detection_start $frigate_detector_name=$frigate_detection_start
-	"
-				let counter=counter+1
-			done <<< $(echo "$raw_metrics" | grep "frigate_detection_start")
+				frigate_detector_mem_usage_percent_ffmpeg=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "detectors" | grep "${frigate_detector_name[$yy]}")
+				frigate_detector_mem_usage_percent_ffmpeg=$(echo "${frigate_detector_mem_usage_percent_ffmpeg##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				post_url=$post_url"$measurement,nas_name=$nas_name,metric=detection_start ${frigate_detector_name[$yy]}=$frigate_detection_start
+"
+
+				post_url=$post_url"$measurement,nas_name=$nas_name,metric=detector_cpu_usage_percent_ffmpeg ${frigate_detector_name[$yy]}=$frigate_detector_cpu_usage_percent_ffmpeg
+"
+
+				post_url=$post_url"$measurement,nas_name=$nas_name,metric=detector_mem_usage_percent_ffmpeg ${frigate_detector_name[$yy]}=$frigate_detector_mem_usage_percent_ffmpeg
+"
+			done
 			
 			#####################################
 			#CAMERA LEVEL METRICS
@@ -574,8 +601,26 @@ if [[ -r "$config_file_location" ]]; then
 				frigate_skipped_fps=$(echo "$raw_metrics" | grep "frigate_skipped_fps" | grep "${camera_name[$counter]}")
 				frigate_skipped_fps=$(echo "${frigate_skipped_fps##* }") #stores just the value at the end as it is after the only space char in the string
 				
-				post_url=$post_url"$measurement,nas_name=$nas_name,metric=camera_details,camera=${camera_name[$counter]} frigate_audio_dBFS=$frigate_audio_dBFS,frigate_audio_rms=$frigate_audio_rms,frigate_camera_fps=$frigate_camera_fps,frigate_detection_fps=$frigate_detection_fps,frigate_process_fps=$frigate_process_fps,frigate_skipped_fps=$frigate_skipped_fps
-	"
+				frigate_camera_cpu_usage_percent_ffmpeg=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "ffmpeg" | grep "${camera_name[$counter]}")
+				frigate_camera_cpu_usage_percent_ffmpeg=$(echo "${frigate_camera_cpu_usage_percent_ffmpeg##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				frigate_camera_cpu_usage_percent_capture=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "frigate.capture" | grep "${camera_name[$counter]}")
+				frigate_camera_cpu_usage_percent_capture=$(echo "${frigate_camera_cpu_usage_percent_capture##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				frigate_camera_cpu_usage_percent_process=$(echo "$raw_metrics" | grep "frigate_cpu_usage_percent" | grep "frigate.process" | grep "${camera_name[$counter]}")
+				frigate_camera_cpu_usage_percent_process=$(echo "${frigate_camera_cpu_usage_percent_process##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				frigate_camera_mem_usage_percent_ffmpeg=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "ffmpeg" | grep "${camera_name[$counter]}")
+				frigate_camera_mem_usage_percent_ffmpeg=$(echo "${frigate_camera_mem_usage_percent_ffmpeg##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				frigate_camera_mem_usage_percent_capture=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "frigate.capture" | grep "${camera_name[$counter]}")
+				frigate_camera_mem_usage_percent_capture=$(echo "${frigate_camera_mem_usage_percent_capture##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				frigate_camera_mem_usage_percent_process=$(echo "$raw_metrics" | grep "frigate_mem_usage_percent" | grep "frigate.process" | grep "${camera_name[$counter]}")
+				frigate_camera_mem_usage_percent_process=$(echo "${frigate_camera_mem_usage_percent_process##* }") #stores just the value at the end as it is after the only space char in the string
+				
+				post_url=$post_url"$measurement,nas_name=$nas_name,metric=camera_details,camera=${camera_name[$counter]} frigate_audio_dBFS=$frigate_audio_dBFS,frigate_audio_rms=$frigate_audio_rms,frigate_camera_fps=$frigate_camera_fps,frigate_detection_fps=$frigate_detection_fps,frigate_process_fps=$frigate_process_fps,frigate_skipped_fps=$frigate_skipped_fps,frigate_camera_cpu_usage_percent_ffmpeg=$frigate_camera_cpu_usage_percent_ffmpeg,frigate_camera_cpu_usage_percent_capture=$frigate_camera_cpu_usage_percent_capture,frigate_camera_cpu_usage_percent_process=$frigate_camera_cpu_usage_percent_process,frigate_camera_mem_usage_percent_ffmpeg=$frigate_camera_mem_usage_percent_ffmpeg,frigate_camera_mem_usage_percent_capture=$frigate_camera_mem_usage_percent_capture,frigate_camera_mem_usage_percent_process=$frigate_camera_mem_usage_percent_process
+"
 			done
 			
 			
